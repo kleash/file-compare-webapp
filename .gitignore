@@ -39,3 +39,4 @@ build/
 /file_comparison_storage/
 /file_compare_db.lock.db
 /file_compare_db.mv.db
+/.idea/
