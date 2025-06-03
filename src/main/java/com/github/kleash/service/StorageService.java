@@ -7,10 +7,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.UUID;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -32,7 +35,7 @@ public class StorageService {
     @PostConstruct
     public void init() {
         try {
-            baseStoragePath = Paths.get(basePathStringConfig).toAbsolutePath().normalize();
+            baseStoragePath = Path.of(basePathStringConfig).toAbsolutePath().normalize();
             Files.createDirectories(baseStoragePath);
             logger.info("Base storage directory created/ensured at: {}", baseStoragePath);
         } catch (IOException e) {
@@ -57,7 +60,7 @@ public class StorageService {
         if (originalFilename == null || originalFilename.contains("..")) {
             throw new IOException("Security: Cannot store file with relative path outside current directory: " + originalFilename);
         }
-        Path destinationFile = sessionPath.resolve(Paths.get(originalFilename)).normalize().toAbsolutePath();
+        Path destinationFile = sessionPath.resolve(Path.of(originalFilename)).normalize().toAbsolutePath();
         if (!destinationFile.getParent().equals(sessionPath.toAbsolutePath())) {
             throw new IOException("Security: Cannot store file outside session directory: " + originalFilename);
         }

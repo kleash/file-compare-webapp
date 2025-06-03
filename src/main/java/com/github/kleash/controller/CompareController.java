@@ -22,13 +22,12 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.servlet.http.HttpServletRequest; // For User-Agent and other request details
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest; // For User-Agent and other request details
+import jakarta.servlet.http.HttpSession;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -65,7 +64,7 @@ public class CompareController {
     public ResponseEntity<ComparisonResponse> compare(
             @RequestParam(value = "source1Files", required = false) MultipartFile[] source1FilesArr,
             @RequestParam(value = "source2Files", required = false) MultipartFile[] source2FilesArr,
-            @RequestParam(value = "sortFiles", defaultValue = "false") boolean sortFiles,
+            @RequestParam(defaultValue = "false") boolean sortFiles,
             @RequestParam(value = "manualPairs", required = false) String manualPairsJson,
             HttpServletRequest httpRequest, // Injected to get request details like User-Agent
             HttpSession httpSession) {
@@ -174,7 +173,7 @@ public class CompareController {
             return ResponseEntity.badRequest().body(null); // Or ResponseEntity.noContent().build();
         }
 
-        Path sessionAbsolutePath = Paths.get(sessionPathString);
+        Path sessionAbsolutePath = Path.of(sessionPathString);
         if (!Files.exists(sessionAbsolutePath) || !Files.isDirectory(sessionAbsolutePath)) {
             logger.warn("Session path {} from HTTP session does not exist or is not a directory.", sessionPathString);
             return ResponseEntity.notFound().build();
@@ -222,7 +221,7 @@ public class CompareController {
         String sessionPathString = (String) httpSession.getAttribute(LAST_COMPARISON_SESSION_PATH_KEY);
 
         if (sessionPathString != null) {
-            Path sessionAbsolutePath = Paths.get(sessionPathString);
+            Path sessionAbsolutePath = Path.of(sessionPathString);
             logger.info("User initiated cleanup for session: {}", sessionPathString);
             storageService.deleteSessionDirectory(sessionAbsolutePath); // This handles actual deletion
             httpSession.removeAttribute(LAST_COMPARISON_SESSION_PATH_KEY); // Clear from HTTP session
