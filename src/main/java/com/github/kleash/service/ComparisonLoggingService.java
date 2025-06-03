@@ -8,7 +8,10 @@ import com.github.kleash.repository.ComparisonLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import javax.servlet.http.HttpServletRequest; // For User-Agent
+import javax.servlet.http.HttpServletRequest;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ComparisonLoggingService {
@@ -16,9 +19,17 @@ public class ComparisonLoggingService {
     @Autowired
     private ComparisonLogRepository comparisonLogRepository;
 
-    public void logComparison(ComparisonResponse response, String sessionId, long executionTimeMs, String reportsZipPath, HttpServletRequest request) {
+    public void logComparison(
+            ComparisonResponse response,
+            String sessionId,
+            long executionTimeMs,
+            String reportsZipPath,
+            HttpServletRequest request,
+            List<Path> s1FilePaths, // Add original file paths
+            List<Path> s2FilePaths  // Add original file paths
+    ) {
         if (response == null || response.getMetrics() == null) {
-            return; // Don't log if there's no valid response data
+            return;
         }
         OverallMetrics metrics = response.getMetrics();
         ComparisonLog log = new ComparisonLog();
@@ -31,10 +42,18 @@ public class ComparisonLoggingService {
         log.setFilesOnlyInSource1(metrics.getFilesOnlyInSource1());
         log.setFilesOnlyInSource2(metrics.getFilesOnlyInSource2());
         log.setTotalExecutionTimeMs(executionTimeMs);
-        log.setReportsZipPath(reportsZipPath); // Store relative path to ZIP
+        log.setReportsZipPath(reportsZipPath);
 
         if (request != null) {
             log.setUserAgent(request.getHeader("User-Agent"));
+        }
+
+        // Set concatenated file names
+        if (s1FilePaths != null) {
+            log.setSource1FileNamesList(s1FilePaths.stream().map(p -> p.getFileName().toString()).collect(Collectors.toList()));
+        }
+        if (s2FilePaths != null) {
+            log.setSource2FileNamesList(s2FilePaths.stream().map(p -> p.getFileName().toString()).collect(Collectors.toList()));
         }
 
         comparisonLogRepository.save(log);

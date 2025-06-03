@@ -100,41 +100,35 @@ public class CompareController {
         }
 
         try {
-            sessionPath = storageService.createSessionDirectory(); // Creates a unique directory for this session
+            sessionPath = storageService.createSessionDirectory();
             logger.info("Created session directory for comparison: {}", sessionPath);
 
-            List<Path> s1FilePaths = new ArrayList<>();
+            List<Path> s1StoredFilePaths = new ArrayList<>(); // Store paths of successfully stored files
             for (MultipartFile file : source1Files) {
-                s1FilePaths.add(storageService.storeUploadedFile(file, sessionPath));
+                s1StoredFilePaths.add(storageService.storeUploadedFile(file, sessionPath));
             }
-            logger.info("Stored {} files for Source 1 in session directory.", s1FilePaths.size());
+            logger.info("Stored {} files for Source 1 in session directory.", s1StoredFilePaths.size());
 
-            List<Path> s2FilePaths = new ArrayList<>();
+            List<Path> s2StoredFilePaths = new ArrayList<>();
             for (MultipartFile file : source2Files) {
-                s2FilePaths.add(storageService.storeUploadedFile(file, sessionPath));
+                s2StoredFilePaths.add(storageService.storeUploadedFile(file, sessionPath));
             }
-            logger.info("Stored {} files for Source 2 in session directory.", s2FilePaths.size());
+            logger.info("Stored {} files for Source 2 in session directory.", s2StoredFilePaths.size());
 
-            ComparisonResponse response = compareService.compareFiles(s1FilePaths, s2FilePaths, sortFiles, sessionPath, manualPairs);
+            // Pass s1StoredFilePaths and s2StoredFilePaths to compareService
+            ComparisonResponse response = compareService.compareFiles(s1StoredFilePaths, s2StoredFilePaths, sortFiles, sessionPath, manualPairs);
 
             long executionTimeMs = System.currentTimeMillis() - startTime;
 
-            // Construct the expected relative path for the ZIP file for logging purposes.
-            // The actual ZIP is created on demand by downloadReportsZip.
             relativeSessionPathForZip = storageService.getRelativePathForClient(sessionPath, storageService.getBaseStoragePath());
             String potentialZipPath = (relativeSessionPathForZip != null ? relativeSessionPathForZip : sessionPath.getFileName().toString())
                     + "/comparison_reports_" + sessionPath.getFileName().toString() + ".zip";
 
-            // Log the successful comparison
-            loggingService.logComparison(response, sessionPath.getFileName().toString(), executionTimeMs, potentialZipPath, httpRequest);
+            // Pass the lists of stored file Paths to the logging service
+            loggingService.logComparison(response, sessionPath.getFileName().toString(), executionTimeMs, potentialZipPath, httpRequest, s1StoredFilePaths, s2StoredFilePaths);
             logger.info("Comparison completed successfully in {} ms. Session: {}", executionTimeMs, sessionPath.getFileName());
 
-            // Store the ABSOLUTE session path in HTTP session for the download endpoint
             httpSession.setAttribute(LAST_COMPARISON_SESSION_PATH_KEY, sessionPath.toString());
-
-            // The response.sessionDirectoryRelativePath is already set by CompareService,
-            // it's for client-side reference if needed.
-
             return ResponseEntity.ok(response);
 
         } catch (IOException e) {
@@ -146,8 +140,10 @@ public class CompareController {
             errorMetrics.setTotalFilesS2(source2Files.size());
             // Create a dummy/error response for logging
             ComparisonResponse errorResponse = new ComparisonResponse(errorMetrics, Collections.emptyList(), null);
-            loggingService.logComparison(errorResponse, (sessionPath != null ? sessionPath.getFileName().toString() : "ERROR_SESSION_" + UUID.randomUUID()), executionTimeMs, "N/A_DUE_TO_ERROR", httpRequest);
-
+            loggingService.logComparison(errorResponse,
+                    (sessionPath != null ? sessionPath.getFileName().toString() : "ERROR_SESSION_" + UUID.randomUUID()),
+                    executionTimeMs, "N/A_DUE_TO_ERROR", httpRequest,
+                    Collections.emptyList(), Collections.emptyList()); // Pass empty lists for filenames on error
 
             if (sessionPath != null) {
                 logger.info("Attempting to clean up session directory due to error: {}", sessionPath);
@@ -159,7 +155,8 @@ public class CompareController {
             long executionTimeMs = System.currentTimeMillis() - startTime;
             OverallMetrics errorMetrics = new OverallMetrics();
             ComparisonResponse errorResponse = new ComparisonResponse(errorMetrics, Collections.emptyList(), null);
-            loggingService.logComparison(errorResponse, (sessionPath != null ? sessionPath.getFileName().toString() : "UNEXPECTED_ERROR_SESSION_" + UUID.randomUUID()), executionTimeMs, "N/A_DUE_TO_UNEXPECTED_ERROR", httpRequest);
+            loggingService.logComparison(errorResponse, (sessionPath != null ? sessionPath.getFileName().toString() : "UNEXPECTED_ERROR_SESSION_" + UUID.randomUUID()),
+                    executionTimeMs, "N/A_DUE_TO_UNEXPECTED_ERROR", httpRequest, Collections.emptyList(), Collections.emptyList());
 
             if (sessionPath != null) {
                 storageService.deleteSessionDirectory(sessionPath);
