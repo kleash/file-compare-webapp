@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Comparison Tool - Vue.js</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <!-- Custom CSS (can be inlined or linked) -->
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+        .drop-zone {
+            border: 2px dashed #adb5bd;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .drop-zone:hover { background-color: #e9ecef; border-color: #007bff; }
+        .drop-zone.dragover { background-color: #cfe2ff; border-color: #0d6efd; border-style: solid; }
+        .drop-zone.dragover .fa-cloud-upload-alt { color: #0d6efd !important; }
+
+        .file-list-item { padding: 0.5rem 0.75rem; font-size: 0.9em; }
+        .remove-file-btn { background: none; border: none; color: var(--bs-danger); cursor: pointer; font-size: 1.1em; }
+        .pairing-list .list-group-item { cursor: pointer; }
+        .pairing-list .list-group-item.selected { background-color: #cfe2ff !important; font-weight: bold; }
+        .pairing-list .list-group-item.paired { background-color: #e9ecef !important; color: #6c757d !important; cursor: not-allowed; text-decoration: line-through; }
+        .current-pair-item { font-size: 0.9em; }
+
+        /* Diff View Styles (similar to previous) */
+        .diff-container { margin-top: 1rem; }
+        .diff-line-detail { margin-bottom: 1rem; padding: 0.75rem; border: 1px solid #dee2e6; border-radius: 0.375rem; background-color: #fff; }
+        .diff-line-detail strong.line-number { display: block; margin-bottom: 0.5rem; font-size: 0.9em; border-bottom: 1px dashed #ced4da; padding-bottom: 0.25rem; }
+        .diff-content-block { padding: 0.5rem; border-radius: 0.25rem; font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; word-break: break-all; font-size: 0.85em; line-height: 1.5; }
+        .diff-s1 { background-color: #fddfdf; border-left: 3px solid #f5c6cb; color: #58151c; }
+        .diff-s2 { background-color: #ddebf7; border-left: 3px solid #b8daff; color: #052c65; }
+        .diff-placeholder { background-color: #f8f9fa; color: #6c757d; font-style: italic; text-align: center; border: 1px dashed #ced4da; }
+        .content-details { margin-top: 0.5rem; white-space: pre-wrap; font-family: monospace; background-color: #f8f9fa; padding: 0.75rem; border: 1px solid #dee2e6; max-height: 300px; overflow-y: auto; font-size: 0.85em; }
+
+        .accordion-button-matched { background-color: #d1e7dd !important; color: #0f5132 !important; }
+        .accordion-button-matched:not(.collapsed) { background-color: #198754 !important; color: white !important;}
+        .accordion-button-mismatched { background-color: #f8d7da !important; color: #842029 !important;}
+        .accordion-button-mismatched:not(.collapsed) { background-color: #dc3545 !important; color: white !important;}
+        .accordion-button-missing { background-color: #fff3cd !important; color: #664d03 !important;}
+        .accordion-button-missing:not(.collapsed) { background-color: #ffc107 !important; color: black !important;}
+        .accordion-button-error { background-color: #f8d7da !important; color: #842029 !important;}
+        .accordion-button-error:not(.collapsed) { background-color: #dc3545 !important; color: white !important;}
+        .accordion-button-different-row-count { background-color: #ffe5d0 !important; color: #814000 !important; }
+        .accordion-button-different-row-count:not(.collapsed) { background-color: #fd7e14 !important; color: white !important;}
+    </style>
+</head>
+<body>
+<div id="app" class="container mt-4 mb-5">
+    <header class="text-center mb-5">
+        <h1 class="display-5"><i class="fas fa-exchange-alt me-2"></i>File Comparison Tool</h1>
+        <p class="lead">Enhanced with Vue.js for a better experience.</p>
+    </header>
+
+    <!-- File Upload Section -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <file-uploader source-id="1" title="Source 1 Files" header-bg="bg-primary" @files-updated="updateFiles1"></file-uploader>
+        </div>
+        <div class="col-md-6">
+            <file-uploader source-id="2" title="Source 2 Files" header-bg="bg-success" @files-updated="updateFiles2"></file-uploader>
+        </div>
+    </div>
+
+    <!-- Manual Pairing Section (Conditional) -->
+    <div v-if="showManualPairingSection" class="card mt-4 mb-4">
+        <div class="card-header">
+            <h4 class="mb-0"><i class="fas fa-link me-2"></i>Manual File Pairing</h4>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small">If filenames don't match, or for specific comparisons, define pairs here. Otherwise, files will be matched by name for any remaining unpaired files.</p>
+            <div class="row">
+                <div class="col-md-5">
+                    <h6>Source 1 (Available: {{ availableS1ForPairing.length }})</h6>
+                    <ul class="list-group pairing-list" style="max-height: 200px; overflow-y: auto;">
+                        <li v-for="file in availableS1ForPairing" :key="file.name"
+                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            :class="{ 'selected': selectedS1ToPair === file.name }"
+                            @click="selectS1ForPairing(file.name)">
+                            {{ file.name }}
+                            <i v-if="selectedS1ToPair === file.name" class="fas fa-check-circle text-primary"></i>
+                        </li>
+                        <li v-if="!availableS1ForPairing.length" class="list-group-item text-muted">No files available or all paired.</li>
+                    </ul>
+                </div>
+                <div class="col-md-2 text-center align-self-center">
+                    <button class="btn btn-info btn-sm my-2" @click="addManualPair" :disabled="!canAddManualPair">
+                        <i class="fas fa-plus-circle me-1"></i> Pair Selected
+                    </button>
+                </div>
+                <div class="col-md-5">
+                    <h6>Source 2 (Available: {{ availableS2ForPairing.length }})</h6>
+                    <ul class="list-group pairing-list" style="max-height: 200px; overflow-y: auto;">
+                        <li v-for="file in availableS2ForPairing" :key="file.name"
+                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            :class="{ 'selected': selectedS2ToPair === file.name }"
+                            @click="selectS2ForPairing(file.name)">
+                            {{ file.name }}
+                            <i v-if="selectedS2ToPair === file.name" class="fas fa-check-circle text-success"></i>
+                        </li>
+                        <li v-if="!availableS2ForPairing.length" class="list-group-item text-muted">No files available or all paired.</li>
+                    </ul>
+                </div>
+            </div>
+            <hr v-if="manualPairs.length > 0">
+            <div v-if="manualPairs.length > 0">
+                <h6>Current Manual Pairs ({{ manualPairs.length }})</h6>
+                <ul class="list-group">
+                    <li v-for="(pair, index) in manualPairs" :key="index"
+                        class="list-group-item d-flex justify-content-between align-items-center current-pair-item">
+                            <span>
+                                <i class="fas fa-file-alt text-primary me-1"></i>{{ pair.source1FileName }}
+                                <i class="fas fa-arrows-alt-h mx-2 text-muted"></i>
+                                <i class="fas fa-file-alt text-success me-1"></i>{{ pair.source2FileName }}
+                            </span>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" @click="removeManualPair(index)">
+                            <i class="fas fa-unlink"></i>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <p v-if="manualPairs.length === 0 && showManualPairingSection" class="text-muted small mt-2">No manual pairs defined.</p>
+        </div>
+    </div>
+
+
+    <!-- Options & Actions -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="sortFilesCheckbox" v-model="sortFiles">
+                <label class="form-check-label" for="sortFilesCheckbox">
+                    Sort files by name before automatic pairing (if no manual pairs conflict)
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mb-4">
+        <button @click="performComparison" class="btn btn-primary btn-lg px-5" :disabled="isLoading || (source1Files.length === 0 && source2Files.length === 0)">
+            <span v-if="isLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            <i v-else class="fas fa-balance-scale me-2"></i>
+            Compare Files
+        </button>
+        <button v-if="comparisonResponse && comparisonResponse.pairResults && comparisonResponse.pairResults.length > 0"
+                @click="downloadReportsZip" class="btn btn-success btn-lg px-5 ms-2" :disabled="isLoading">
+            <i class="fas fa-file-archive me-2"></i>Download All Reports (ZIP)
+        </button>
+    </div>
+
+    <!-- Results Area -->
+    <div v-if="isLoading || comparisonResponse" id="resultsArea" class="mt-4">
+        <div v-if="isLoading" class="text-center p-5">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h4 class="mt-3">Comparing files, please wait...</h4>
+        </div>
+
+        <div v-if="comparisonError" class="alert alert-danger">
+            <strong>Error:</strong> {{ comparisonError }}
+        </div>
+
+        <div v-if="!isLoading && comparisonResponse">
+            <!-- Metrics -->
+            <div v-if="comparisonResponse.metrics" class="mb-4">
+                <h3 class="mb-3"><i class="fas fa-chart-bar me-2"></i>Overall Metrics</h3>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="table-light"><tr><th>Metric</th><th>Value</th></tr></thead>
+                        <tbody>
+                        <tr v-for="(value, key) in comparisonResponse.metrics" :key="key">
+                            <td>{{ formatMetricKey(key) }}</td>
+                            <td>
+                                        <span v-if="key.includes('Pairs') || key.includes('OnlyIn')"
+                                              :class="getBadgeClass(key, value)">
+                                            {{ value }}
+                                        </span>
+                                <span v-else>{{ value }}</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- File Pair Details Accordion -->
+            <div v-if="comparisonResponse.pairResults && comparisonResponse.pairResults.length > 0">
+                <h3 class="mb-3"><i class="fas fa-list-ul me-2"></i>File Pair Details</h3>
+                <div class="accordion" id="comparisonAccordionVue">
+                    <div v-for="(pair, index) in comparisonResponse.pairResults" :key="pair.source1FileName + '-' + pair.source2FileName + '-' + index" class="accordion-item">
+                        <h2 class="accordion-header" :id="'heading' + index">
+                            <button class="accordion-button collapsed" :class="getAccordionHeaderClass(pair.status)" type="button"
+                                    data-bs-toggle="collapse" :data-bs-target="'#collapse' + index"
+                                    aria-expanded="false" :aria-controls="'collapse' + index">
+                                <i :class="getStatusIcon(pair.status) + ' me-2'"></i>
+                                <strong>{{ pair.source1FileName || 'N/A' }}</strong>
+                                <span class="text-muted mx-2">vs</span>
+                                <strong>{{ pair.source2FileName || 'N/A' }}</strong>
+                                <small class="ms-auto text-muted fw-normal me-3">{{ pair.status }}</small>
+                            </button>
+                        </h2>
+                        <div :id="'collapse' + index" class="accordion-collapse collapse"
+                             :aria-labelledby="'heading' + index" data-bs-parent="#comparisonAccordionVue">
+                            <div class="accordion-body">
+                                <p v-if="pair.errorMessage" class="alert alert-danger p-2"><small>{{ pair.errorMessage }}</small></p>
+                                <div v-if="pair.status === 'MATCHED'">
+                                    <p class="text-success"><i class="fas fa-thumbs-up me-1"></i>Files are identical ({{ pair.matchCount }} lines).</p>
+                                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's1')">
+                                        View Source 1 Content ({{ pair.source1Content ? pair.source1Content.length : 0 }} lines)
+                                    </button>
+                                    <div v-if="pair.showS1Content" class="content-details">{{ pair.source1Content.join('\n') }}</div>
+                                </div>
+                                <div v-else-if="pair.status === 'MISSING_IN_SOURCE1'">
+                                    <p>File missing in Source 1. Source 2 has {{ pair.source2Content ? pair.source2Content.length : 0 }} lines.</p>
+                                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's2')">
+                                        View Source 2 Content
+                                    </button>
+                                    <div v-if="pair.showS2Content" class="content-details">{{ pair.source2Content.join('\n') }}</div>
+                                </div>
+                                <div v-else-if="pair.status === 'MISSING_IN_SOURCE2'">
+                                    <p>File missing in Source 2. Source 1 has {{ pair.source1Content ? pair.source1Content.length : 0 }} lines.</p>
+                                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's1')">
+                                        View Source 1 Content
+                                    </button>
+                                    <div v-if="pair.showS1Content" class="content-details">{{ pair.source1Content.join('\n') }}</div>
+                                </div>
+                                <div v-else-if="pair.status === 'MISMATCHED' || pair.status === 'DIFFERENT_ROW_COUNT'">
+                                    <p>Summary: {{ pair.mismatchCount }} mismatches, {{ pair.missingInSource2Count }} S1-only lines, {{ pair.missingInSource1Count }} S2-only lines. {{ pair.matchCount }} matching lines.</p>
+                                    <div v-if="pair.differences && pair.differences.length > 0" class="diff-container">
+                                        <h6 class="mt-2 mb-2">Line Differences:</h6>
+                                        <div v-for="diff in pair.differences" :key="diff.lineNumber" class="diff-line-detail">
+                                            <strong class="line-number">Line {{ diff.lineNumber }}: {{ diff.type.replace(/_/g, ' ') }}</strong>
+                                            <div class="row g-2">
+                                                <div class="col-md-6">
+                                                    <div v-if="diff.source1Line !== null" class="diff-content-block diff-s1"><strong>S1:</strong><br>{{ diff.source1Line }}</div>
+                                                    <div v-else class="diff-content-block diff-placeholder">--- Missing in S1 ---</div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div v-if="diff.source2Line !== null" class="diff-content-block diff-s2"><strong>S2:</strong><br>{{ diff.source2Line }}</div>
+                                                    <div v-else class="diff-content-block diff-placeholder">--- Missing in S2 ---</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div v-else><p class="text-muted">No specific line differences listed (could be only length or parse issue before diffing).</p></div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-sm btn-outline-secondary mb-1 me-2" @click="toggleContent(pair, 's1')">
+                                            View Full S1 ({{ pair.source1Content ? pair.source1Content.length : 0 }} lines)
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary mb-1" @click="toggleContent(pair, 's2')">
+                                            View Full S2 ({{ pair.source2Content ? pair.source2Content.length : 0 }} lines)
+                                        </button>
+                                        <div v-if="pair.showS1Content" class="content-details mt-1">{{ pair.source1Content.join('\n') }}</div>
+                                        <div v-if="pair.showS2Content" class="content-details mt-1">{{ pair.source2Content.join('\n') }}</div>
+                                    </div>
+                                </div>
+                                <!-- Individual report download link (conceptual - requires backend to serve individual files) -->
+                                <!-- <a v-if="pair.individualReportPath" :href="'/download-report/' + comparisonResponse.sessionDirectoryRelativePath + '/' + pair.individualReportPath" target="_blank" class="btn btn-sm btn-link">Download Individual Report</a> -->
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="comparisonResponse.pairResults && comparisonResponse.pairResults.length === 0" class="alert alert-info">
+                        No file pairs were processed or resulted from the comparison.
+                    </div>
+                </div>
+            </div>
+            <button v-if="comparisonResponse && comparisonResponse.sessionDirectoryRelativePath"
+                    @click="cleanupSession" class="btn btn-sm btn-outline-warning mt-4">
+                <i class="fas fa-trash-alt me-1"></i> Clear Server Session Data for this Comparison
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Vue.js App Script -->
+<script>
+    const { createApp, ref, computed, watch } = Vue;
+
+    const FileUploader = {
+        props: ['sourceId', 'title', 'headerBg'],
+        emits: ['files-updated'],
+        setup(props, { emit }) {
+            const files = ref([]);
+            const dragOver = ref(false);
+            const fileInputRef = ref(null);
+
+            function handleFileDrop(event) {
+                dragOver.value = false;
+                addFiles(event.dataTransfer.files);
+            }
+
+            function handleFileInput(event) {
+                addFiles(event.target.files);
+                if(fileInputRef.value) fileInputRef.value.value = null; // Reset input
+            }
+
+            function addFiles(fileList) {
+                const newFiles = Array.from(fileList).filter(
+                    newFile => !files.value.some(existingFile => existingFile.name === newFile.name && existingFile.size === newFile.size)
+                );
+                files.value.push(...newFiles);
+                emit('files-updated', [...files.value]); // Emit copy
+            }
+
+            function removeFile(index) {
+                files.value.splice(index, 1);
+                emit('files-updated', [...files.value]);
+            }
+
+            function clearFiles() {
+                files.value = [];
+                emit('files-updated', []);
+            }
+
+            return {
+                files, dragOver, fileInputRef,
+                handleFileDrop, handleFileInput, removeFile, clearFiles,
+                formatSize: (size) => (size / 1024).toFixed(2) + ' KB'
+            };
+        },
+        template: `
+                <div class="card h-100">
+                    <div class="card-header text-white" :class="headerBg">
+                        <h5 class="mb-0"><i class="fas" :class="sourceId === 1 ? 'fa-file-upload' : 'fa-file-import'"></i> {{ title }}</h5>
+                    </div>
+                    <div class="card-body d-flex flex-column">
+                        <div class="drop-zone mb-3 flex-grow-1"
+                             :class="{ 'dragover': dragOver }"
+                             @click="fileInputRef.click()"
+                             @dragover.prevent="dragOver = true"
+                             @dragenter.prevent="dragOver = true"
+                             @dragleave.prevent="dragOver = false"
+                             @drop.prevent="handleFileDrop">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
+                            <p class="mb-0 small">Drag & drop files here or click to select</p>
+                            <input type="file" multiple class="d-none" ref="fileInputRef" @change="handleFileInput">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted">{{ files.length }} file(s) selected</small>
+                            <button v-if="files.length > 0" @click="clearFiles" class="btn btn-sm btn-outline-secondary py-0 px-1">Clear All</button>
+                        </div>
+                        <ul v-if="files.length > 0" class="list-group list-group-flush file-list-bootstrap" style="max-height: 150px; overflow-y: auto;">
+                            <li v-for="(file, index) in files" :key="file.name + index" class="list-group-item file-list-item d-flex justify-content-between align-items-center">
+                                <span>{{ file.name }} <small class="text-muted">({{ formatSize(file.size) }})</small></span>
+                                <button @click.stop="removeFile(index)" class="remove-file-btn"><i class="fas fa-times"></i></button>
+                            </li>
+                        </ul>
+                         <p v-else class="text-muted small text-center">No files selected.</p>
+                    </div>
+                </div>`
+    };
+
+    createApp({
+        components: { FileUploader },
+        setup() {
+            const source1Files = ref([]);
+            const source2Files = ref([]);
+            const sortFiles = ref(false);
+            const manualPairs = ref([]);
+            const selectedS1ToPair = ref(null);
+            const selectedS2ToPair = ref(null);
+
+            const isLoading = ref(false);
+            const comparisonResponse = ref(null);
+            const comparisonError = ref(null);
+
+            const updateFiles1 = (files) => source1Files.value = files;
+            const updateFiles2 = (files) => source2Files.value = files;
+
+            const showManualPairingSection = computed(() => {
+                return (source1Files.value.length > 0 && source2Files.value.length > 0) &&
+                    (source1Files.value.length > 1 || source2Files.value.length > 1);
+            });
+
+            watch([source1Files, source2Files], () => { // Reset pairing selections if main lists change
+                selectedS1ToPair.value = null;
+                selectedS2ToPair.value = null;
+                // If a file used in a manual pair is removed, that pair should ideally be removed too.
+                // For simplicity, we'll let users manage this via the "unpair" button for now.
+                // Or, more robustly:
+                const s1Names = source1Files.value.map(f => f.name);
+                const s2Names = source2Files.value.map(f => f.name);
+                manualPairs.value = manualPairs.value.filter(p =>
+                    s1Names.includes(p.source1FileName) && s2Names.includes(p.source2FileName)
+                );
+            });
+
+
+            const availableS1ForPairing = computed(() => {
+                const pairedS1Names = manualPairs.value.map(p => p.source1FileName);
+                return source1Files.value.filter(f => !pairedS1Names.includes(f.name));
+            });
+            const availableS2ForPairing = computed(() => {
+                const pairedS2Names = manualPairs.value.map(p => p.source2FileName);
+                return source2Files.value.filter(f => !pairedS2Names.includes(f.name));
+            });
+
+            function selectS1ForPairing(fileName) {
+                selectedS1ToPair.value = (selectedS1ToPair.value === fileName) ? null : fileName;
+            }
+            function selectS2ForPairing(fileName) {
+                selectedS2ToPair.value = (selectedS2ToPair.value === fileName) ? null : fileName;
+            }
+
+            const canAddManualPair = computed(() => selectedS1ToPair.value && selectedS2ToPair.value);
+
+            function addManualPair() {
+                if (canAddManualPair.value) {
+                    manualPairs.value.push({
+                        source1FileName: selectedS1ToPair.value,
+                        source2FileName: selectedS2ToPair.value
+                    });
+                    selectedS1ToPair.value = null;
+                    selectedS2ToPair.value = null;
+                }
+            }
+            function removeManualPair(index) {
+                manualPairs.value.splice(index, 1);
+            }
+
+            async function performComparison() {
+                isLoading.value = true;
+                comparisonResponse.value = null;
+                comparisonError.value = null;
+
+                const formData = new FormData();
+                source1Files.value.forEach(f => formData.append('source1Files', f));
+                source2Files.value.forEach(f => formData.append('source2Files', f));
+                formData.append('sortFiles', sortFiles.value);
+                formData.append('manualPairs', JSON.stringify(manualPairs.value));
+
+                try {
+                    const response = await fetch('/compare', { method: 'POST', body: formData });
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Server error ${response.status}: ${errorText || 'Failed to compare.'}`);
+                    }
+                    const data = await response.json();
+                    // Add showS1Content/showS2Content flags for UI toggles
+                    if(data.pairResults) {
+                        data.pairResults.forEach(pair => {
+                            pair.showS1Content = false;
+                            pair.showS2Content = false;
+                        });
+                    }
+                    comparisonResponse.value = data;
+                } catch (err) {
+                    console.error("Comparison error:", err);
+                    comparisonError.value = err.message;
+                } finally {
+                    isLoading.value = false;
+                }
+            }
+
+            function downloadReportsZip() {
+                if (comparisonResponse.value && comparisonResponse.value.sessionDirectoryRelativePath) {
+                    window.location.href = '/download-reports'; // Backend handles session
+                } else {
+                    alert("No session information available to download reports.");
+                }
+            }
+
+            async function cleanupSession() {
+                if (!comparisonResponse.value || !comparisonResponse.value.sessionDirectoryRelativePath) {
+                    alert("No comparison session active to clean up.");
+                    return;
+                }
+                isLoading.value = true; // Indicate activity
+                try {
+                    const response = await fetch('/cleanup-comparison-session', { method: 'POST' });
+                    if (response.ok) {
+                        alert('Server session data for this comparison has been cleaned up.');
+                        comparisonResponse.value = null; // Clear UI results
+                        comparisonError.value = null;
+                    } else {
+                        alert('Failed to clean up server session data: ' + await response.text());
+                    }
+                } catch (err) {
+                    alert('Error during cleanup: ' + err.message);
+                } finally {
+                    isLoading.value = false;
+                }
+            }
+
+            function formatMetricKey(key) {
+                return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            }
+            function getBadgeClass(key, value) {
+                if (value === 0 && (key.includes('Mismatched') || key.includes('OnlyIn') || key.includes('Error'))) return 'badge bg-success rounded-pill';
+                if (key.includes('Matched')) return 'badge bg-success rounded-pill';
+                if (key.includes('Mismatched') || key.includes('Error')) return 'badge bg-danger rounded-pill';
+                if (key.includes('OnlyIn')) return 'badge bg-warning text-dark rounded-pill';
+                return '';
+            }
+            function getStatusIcon(status) {
+                switch(status) {
+                    case 'MATCHED': return 'fas fa-check-circle text-success';
+                    case 'MISMATCHED': return 'fas fa-times-circle text-danger';
+                    case 'DIFFERENT_ROW_COUNT': return 'fas fa-exclamation-triangle text-orange';
+                    case 'MISSING_IN_SOURCE1':
+                    case 'MISSING_IN_SOURCE2': return 'fas fa-question-circle text-warning';
+                    case 'PARSE_ERROR_S1':
+                    case 'PARSE_ERROR_S2': return 'fas fa-bug text-danger';
+                    default: return 'fas fa-info-circle text-info';
+                }
+            }
+            function getAccordionHeaderClass(status) {
+                switch(status) {
+                    case 'MATCHED': return 'accordion-button-matched';
+                    case 'MISMATCHED': return 'accordion-button-mismatched';
+                    case 'DIFFERENT_ROW_COUNT': return 'accordion-button-different-row-count';
+                    case 'MISSING_IN_SOURCE1':
+                    case 'MISSING_IN_SOURCE2': return 'accordion-button-missing';
+                    case 'PARSE_ERROR_S1':
+                    case 'PARSE_ERROR_S2': return 'accordion-button-error';
+                    default: return '';
+                }
+            }
+            function toggleContent(pair, source) { // source is 's1' or 's2'
+                if (source === 's1') pair.showS1Content = !pair.showS1Content;
+                if (source === 's2') pair.showS2Content = !pair.showS2Content;
+            }
+
+
+            return {
+                source1Files, source2Files, sortFiles, manualPairs,
+                selectedS1ToPair, selectedS2ToPair,
+                isLoading, comparisonResponse, comparisonError,
+                updateFiles1, updateFiles2,
+                showManualPairingSection,
+                availableS1ForPairing, availableS2ForPairing,
+                selectS1ForPairing, selectS2ForPairing,
+                canAddManualPair, addManualPair, removeManualPair,
+                performComparison, downloadReportsZip, cleanupSession,
+                formatMetricKey, getBadgeClass, getStatusIcon, getAccordionHeaderClass, toggleContent
+            };
+        }
+    }).mount('#app');
+</script>
+<!-- Bootstrap JS Bundle (Popper.js included) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
