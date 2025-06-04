@@ -4,20 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Comparison Tool - Vue.js</title>
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-    <!-- Custom CSS (can be inlined or linked) -->
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
         .drop-zone {
-            border: 2px dashed #adb5bd;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
+            border: 2px dashed #adb5bd; padding: 2rem; text-align: center; cursor: pointer;
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
         .drop-zone:hover { background-color: #e9ecef; border-color: #007bff; }
@@ -31,7 +24,11 @@
         .pairing-list .list-group-item.paired { background-color: #e9ecef !important; color: #6c757d !important; cursor: not-allowed; text-decoration: line-through; }
         .current-pair-item { font-size: 0.9em; }
 
-        /* Diff View Styles (similar to previous) */
+        .column-selection-list { max-height: 150px; overflow-y: auto; padding: 5px; border: 1px solid #eee; border-radius: 4px; margin-top: 0.5rem;}
+        .form-check-inline { margin-right: 1rem !important; margin-bottom: 0.5rem; }
+
+
+        /* Diff View Styles */
         .diff-container { margin-top: 1rem; }
         .diff-line-detail { margin-bottom: 1rem; padding: 0.75rem; border: 1px solid #dee2e6; border-radius: 0.375rem; background-color: #fff; }
         .diff-line-detail strong.line-number { display: block; margin-bottom: 0.5rem; font-size: 0.9em; border-bottom: 1px dashed #ced4da; padding-bottom: 0.25rem; }
@@ -45,6 +42,7 @@
         .accordion-button-matched:not(.collapsed) { background-color: #198754 !important; color: white !important;}
         .accordion-button-mismatched { background-color: #f8d7da !important; color: #842029 !important;}
         .accordion-button-mismatched:not(.collapsed) { background-color: #dc3545 !important; color: white !important;}
+        /* ... other accordion button status styles ... */
         .accordion-button-missing { background-color: #fff3cd !important; color: #664d03 !important;}
         .accordion-button-missing:not(.collapsed) { background-color: #ffc107 !important; color: black !important;}
         .accordion-button-error { background-color: #f8d7da !important; color: #842029 !important;}
@@ -57,7 +55,7 @@
 <div id="app" class="container mt-4 mb-5">
     <header class="text-center mb-5">
         <h1 class="display-5"><i class="fas fa-exchange-alt me-2"></i>File Comparison Tool</h1>
-        <p class="lead">Enhanced with Vue.js for a better experience.</p>
+        <p class="lead">Enhanced with Vue.js and Column Ignore feature.</p>
     </header>
 
     <!-- File Upload Section -->
@@ -72,211 +70,151 @@
 
     <!-- Manual Pairing Section (Conditional) -->
     <div v-if="showManualPairingSection" class="card mt-4 mb-4">
-        <div class="card-header">
-            <h4 class="mb-0"><i class="fas fa-link me-2"></i>Manual File Pairing</h4>
-        </div>
+        <!-- ... (Manual Pairing HTML from previous Vue single-file example) ... -->
+        <div class="card-header"><h4 class="mb-0"><i class="fas fa-link me-2"></i>Manual File Pairing</h4></div>
         <div class="card-body">
-            <p class="text-muted small">If filenames don't match, or for specific comparisons, define pairs here. Otherwise, files will be matched by name for any remaining unpaired files.</p>
+            <p class="text-muted small">Define pairs if filenames don't match or for specific comparisons.</p>
             <div class="row">
                 <div class="col-md-5">
-                    <h6>Source 1 (Available: {{ availableS1ForPairing.length }})</h6>
+                    <h6>S1 Available ({{ availableS1ForPairing.length }})</h6>
                     <ul class="list-group pairing-list" style="max-height: 200px; overflow-y: auto;">
-                        <li v-for="file in availableS1ForPairing" :key="file.name"
-                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                            :class="{ 'selected': selectedS1ToPair === file.name }"
-                            @click="selectS1ForPairing(file.name)">
-                            {{ file.name }}
-                            <i v-if="selectedS1ToPair === file.name" class="fas fa-check-circle text-primary"></i>
-                        </li>
-                        <li v-if="!availableS1ForPairing.length" class="list-group-item text-muted">No files available or all paired.</li>
+                        <li v-for="file in availableS1ForPairing" :key="file.name" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" :class="{ 'selected': selectedS1ToPair === file.name }" @click="selectS1ForPairing(file.name)"> {{ file.name }} <i v-if="selectedS1ToPair === file.name" class="fas fa-check-circle text-primary"></i></li>
+                        <li v-if="!availableS1ForPairing.length" class="list-group-item text-muted small">None or all paired.</li>
                     </ul>
                 </div>
-                <div class="col-md-2 text-center align-self-center">
-                    <button class="btn btn-info btn-sm my-2" @click="addManualPair" :disabled="!canAddManualPair">
-                        <i class="fas fa-plus-circle me-1"></i> Pair Selected
-                    </button>
-                </div>
+                <div class="col-md-2 text-center align-self-center"><button class="btn btn-info btn-sm my-2" @click="addManualPair" :disabled="!canAddManualPair"><i class="fas fa-plus-circle me-1"></i> Pair</button></div>
                 <div class="col-md-5">
-                    <h6>Source 2 (Available: {{ availableS2ForPairing.length }})</h6>
+                    <h6>S2 Available ({{ availableS2ForPairing.length }})</h6>
                     <ul class="list-group pairing-list" style="max-height: 200px; overflow-y: auto;">
-                        <li v-for="file in availableS2ForPairing" :key="file.name"
-                            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                            :class="{ 'selected': selectedS2ToPair === file.name }"
-                            @click="selectS2ForPairing(file.name)">
-                            {{ file.name }}
-                            <i v-if="selectedS2ToPair === file.name" class="fas fa-check-circle text-success"></i>
-                        </li>
-                        <li v-if="!availableS2ForPairing.length" class="list-group-item text-muted">No files available or all paired.</li>
+                        <li v-for="file in availableS2ForPairing" :key="file.name" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" :class="{ 'selected': selectedS2ToPair === file.name }" @click="selectS2ForPairing(file.name)"> {{ file.name }} <i v-if="selectedS2ToPair === file.name" class="fas fa-check-circle text-success"></i></li>
+                        <li v-if="!availableS2ForPairing.length" class="list-group-item text-muted small">None or all paired.</li>
                     </ul>
                 </div>
             </div>
             <hr v-if="manualPairs.length > 0">
             <div v-if="manualPairs.length > 0">
-                <h6>Current Manual Pairs ({{ manualPairs.length }})</h6>
-                <ul class="list-group">
-                    <li v-for="(pair, index) in manualPairs" :key="index"
-                        class="list-group-item d-flex justify-content-between align-items-center current-pair-item">
-                            <span>
-                                <i class="fas fa-file-alt text-primary me-1"></i>{{ pair.source1FileName }}
-                                <i class="fas fa-arrows-alt-h mx-2 text-muted"></i>
-                                <i class="fas fa-file-alt text-success me-1"></i>{{ pair.source2FileName }}
-                            </span>
-                        <button class="btn btn-sm btn-outline-danger py-0 px-1" @click="removeManualPair(index)">
-                            <i class="fas fa-unlink"></i>
-                        </button>
-                    </li>
-                </ul>
+                <h6>Current Pairs ({{ manualPairs.length }})</h6>
+                <ul class="list-group"><li v-for="(pair, index) in manualPairs" :key="index" class="list-group-item d-flex justify-content-between align-items-center current-pair-item"><span><i class="fas fa-file-alt text-primary me-1"></i>{{ pair.source1FileName }} <i class="fas fa-arrows-alt-h mx-2 text-muted"></i> <i class="fas fa-file-alt text-success me-1"></i>{{ pair.source2FileName }}</span> <button class="btn btn-sm btn-outline-danger py-0 px-1" @click="removeManualPair(index)"><i class="fas fa-unlink"></i></button></li></ul>
             </div>
-            <p v-if="manualPairs.length === 0 && showManualPairingSection" class="text-muted small mt-2">No manual pairs defined.</p>
+        </div>
+    </div>
+
+    <!-- Column Ignore Configuration Section -->
+    <div v-if="source1Files.length > 0 || source2Files.length > 0" class="card mt-4 mb-4">
+        <div class="card-header">
+            <h4 class="mb-0"><i class="fas fa-filter me-2"></i>Column Ignore Configuration</h4>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small">Select columns/headers to exclude from the comparison. Headers are auto-detected from the first valid file in each source. If no distinct headers, columns are indexed (0, 1, 2...).</p>
+            <div class="row g-4">
+                <!-- Source 1 Column Selection -->
+                <div class="col-md-6 border-end-md">
+                    <h5>Source 1 Columns
+                        <button v-if="s1DetectedColumns.length > 0 || source1Files.length > 0" @click="detectColumns(1, true)" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" title="Re-detect from first S1 file">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </h5>
+                    <p v-if="s1ColumnDetectionFile" class="small text-muted mb-1">Based on: <i>{{ s1ColumnDetectionFile }}</i></p>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" v-model="s1HasHeader" id="s1HasHeaderCheck" @change="handleHeaderCheckboxChange(1)">
+                        <label class="form-check-label small" for="s1HasHeaderCheck">
+                            First row is header (determines how columns are identified for ignoring)
+                        </label>
+                    </div>
+                    <div v-if="s1ProcessingColumns" class="text-center my-3"><div class="spinner-border spinner-border-sm text-primary"></div> <small>Detecting...</small></div>
+                    <div v-else-if="s1DetectedColumns.length === 0 && source1Files.length > 0" class="alert alert-warning p-2 small">No columns/headers detected for Source 1. Ensure first file is parseable (CSV/Excel-like text).</div>
+                    <div v-else-if="s1DetectedColumns.length > 0">
+                        <button @click="toggleAllS1Ignores" class="btn btn-sm btn-outline-info py-0 px-1 mb-2">
+                            {{ allS1Ignored ? 'Unignore All S1' : 'Ignore All S1' }}
+                        </button>
+                        <div class="column-selection-list">
+                            <div v-for="(colName, index) in s1DetectedColumns" :key="'s1col-'+index" class="form-check">
+                                <input class="form-check-input" type="checkbox" :id="'s1ignore-' + index" :value="s1ColumnIdentifier(colName, index)" v-model="s1ColumnsToIgnoreArray">
+                                <label class="form-check-label small" :for="'s1ignore-' + index">{{ colName }} <small class="text-muted">({{index}})</small></label>
+                            </div>
+                        </div>
+                    </div>
+                    <p v-else-if="source1Files.length > 0" class="small text-muted">Upload S1 files to see columns.</p>
+                </div>
+
+                <!-- Source 2 Column Selection -->
+                <div class="col-md-6">
+                    <h5>Source 2 Columns
+                        <button v-if="s2DetectedColumns.length > 0 || source2Files.length > 0" @click="detectColumns(2, true)" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" title="Re-detect from first S2 file">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </h5>
+                    <p v-if="s2ColumnDetectionFile" class="small text-muted mb-1">Based on: <i>{{ s2ColumnDetectionFile }}</i></p>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" v-model="s2HasHeader" id="s2HasHeaderCheck" @change="handleHeaderCheckboxChange(2)">
+                        <label class="form-check-label small" for="s2HasHeaderCheck">
+                            First row is header (determines how columns are identified for ignoring)
+                        </label>
+                    </div>
+                    <div v-if="s2ProcessingColumns" class="text-center my-3"><div class="spinner-border spinner-border-sm text-success"></div> <small>Detecting...</small></div>
+                    <div v-else-if="s2DetectedColumns.length === 0 && source2Files.length > 0" class="alert alert-warning p-2 small">No columns/headers detected for Source 2.</div>
+                    <div v-else-if="s2DetectedColumns.length > 0">
+                        <button @click="toggleAllS2Ignores" class="btn btn-sm btn-outline-info py-0 px-1 mb-2">
+                            {{ allS2Ignored ? 'Unignore All S2' : 'Ignore All S2' }}
+                        </button>
+                        <div class="column-selection-list">
+                            <div v-for="(colName, index) in s2DetectedColumns" :key="'s2col-'+index" class="form-check">
+                                <input class="form-check-input" type="checkbox" :id="'s2ignore-' + index" :value="s2ColumnIdentifier(colName, index)" v-model="s2ColumnsToIgnoreArray">
+                                <label class="form-check-label small" :for="'s2ignore-' + index">{{ colName }} <small class="text-muted">({{index}})</small></label>
+                            </div>
+                        </div>
+                    </div>
+                    <p v-else-if="source2Files.length > 0" class="small text-muted">Upload S2 files to see columns.</p>
+                </div>
+            </div>
         </div>
     </div>
 
 
     <!-- Options & Actions -->
     <div class="card mb-4">
-        <div class="card-body">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="sortFilesCheckbox" v-model="sortFiles">
-                <label class="form-check-label" for="sortFilesCheckbox">
-                    Sort files by name before automatic pairing (if no manual pairs conflict)
-                </label>
-            </div>
-        </div>
+        <!-- ... (Sort options HTML from previous Vue single-file example) ... -->
+        <div class="card-body"><div class="form-check"><input class="form-check-input" type="checkbox" id="sortFilesCheckbox" v-model="sortFiles"><label class="form-check-label" for="sortFilesCheckbox">Sort files by name for automatic pairing</label></div></div>
     </div>
 
     <div class="text-center mb-4">
-        <button @click="performComparison" class="btn btn-primary btn-lg px-5" :disabled="isLoading || (source1Files.length === 0 && source2Files.length === 0)">
-            <span v-if="isLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-            <i v-else class="fas fa-balance-scale me-2"></i>
-            Compare Files
-        </button>
-        <button v-if="comparisonResponse && comparisonResponse.pairResults && comparisonResponse.pairResults.length > 0"
-                @click="downloadReportsZip" class="btn btn-success btn-lg px-5 ms-2" :disabled="isLoading">
-            <i class="fas fa-file-archive me-2"></i>Download All Reports (ZIP)
-        </button>
+        <!-- ... (Compare and Download buttons HTML from previous Vue single-file example) ... -->
+        <button @click="performComparison" class="btn btn-primary btn-lg px-5" :disabled="isLoading || (source1Files.length === 0 && source2Files.length === 0)"><span v-if="isLoading" class="spinner-border spinner-border-sm me-2"></span><i v-else class="fas fa-balance-scale me-2"></i> Compare Files</button>
+        <button v-if="canDownloadZip" @click="downloadReportsZip" class="btn btn-success btn-lg px-5 ms-2" :disabled="isLoading"><i class="fas fa-file-archive me-2"></i>Download Reports (ZIP)</button>
     </div>
 
     <!-- Results Area -->
-    <div v-if="isLoading || comparisonResponse" id="resultsArea" class="mt-4">
-        <div v-if="isLoading" class="text-center p-5">
-            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <h4 class="mt-3">Comparing files, please wait...</h4>
-        </div>
-
-        <div v-if="comparisonError" class="alert alert-danger">
-            <strong>Error:</strong> {{ comparisonError }}
-        </div>
-
+    <div v-if="isLoading || comparisonResponse || comparisonError" id="resultsArea" class="mt-4">
+        <!-- ... (Loading, Error, Metrics, Accordion HTML from previous Vue single-file example) ... -->
+        <div v-if="isLoading" class="text-center p-5"><div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div><h4 class="mt-3">Comparing files...</h4></div>
+        <div v-if="comparisonError" class="alert alert-danger"><strong>Error:</strong> {{ comparisonError }}</div>
         <div v-if="!isLoading && comparisonResponse">
-            <!-- Metrics -->
             <div v-if="comparisonResponse.metrics" class="mb-4">
                 <h3 class="mb-3"><i class="fas fa-chart-bar me-2"></i>Overall Metrics</h3>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-striped table-hover">
-                        <thead class="table-light"><tr><th>Metric</th><th>Value</th></tr></thead>
-                        <tbody>
-                        <tr v-for="(value, key) in comparisonResponse.metrics" :key="key">
-                            <td>{{ formatMetricKey(key) }}</td>
-                            <td>
-                                        <span v-if="key.includes('Pairs') || key.includes('OnlyIn')"
-                                              :class="getBadgeClass(key, value)">
-                                            {{ value }}
-                                        </span>
-                                <span v-else>{{ value }}</span>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <div class="table-responsive"><table class="table table-bordered table-striped table-hover"><thead class="table-light"><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr v-for="(value, key) in comparisonResponse.metrics" :key="key"><td>{{ formatMetricKey(key) }}</td><td><span v-if="key.includes('Pairs') || key.includes('OnlyIn')" :class="getBadgeClass(key, value)">{{ value }}</span> <span v-else>{{ value }}</span></td></tr></tbody></table></div>
             </div>
-
-            <!-- File Pair Details Accordion -->
             <div v-if="comparisonResponse.pairResults && comparisonResponse.pairResults.length > 0">
                 <h3 class="mb-3"><i class="fas fa-list-ul me-2"></i>File Pair Details</h3>
                 <div class="accordion" id="comparisonAccordionVue">
                     <div v-for="(pair, index) in comparisonResponse.pairResults" :key="pair.source1FileName + '-' + pair.source2FileName + '-' + index" class="accordion-item">
-                        <h2 class="accordion-header" :id="'heading' + index">
-                            <button class="accordion-button collapsed" :class="getAccordionHeaderClass(pair.status)" type="button"
-                                    data-bs-toggle="collapse" :data-bs-target="'#collapse' + index"
-                                    aria-expanded="false" :aria-controls="'collapse' + index">
-                                <i :class="getStatusIcon(pair.status) + ' me-2'"></i>
-                                <strong>{{ pair.source1FileName || 'N/A' }}</strong>
-                                <span class="text-muted mx-2">vs</span>
-                                <strong>{{ pair.source2FileName || 'N/A' }}</strong>
-                                <small class="ms-auto text-muted fw-normal me-3">{{ pair.status }}</small>
-                            </button>
-                        </h2>
-                        <div :id="'collapse' + index" class="accordion-collapse collapse"
-                             :aria-labelledby="'heading' + index" data-bs-parent="#comparisonAccordionVue">
+                        <h2 class="accordion-header" :id="'heading' + index"><button class="accordion-button collapsed" :class="getAccordionHeaderClass(pair.status)" type="button" data-bs-toggle="collapse" :data-bs-target="'#collapse' + index"><i :class="getStatusIcon(pair.status) + ' me-2'"></i><strong>{{ pair.source1FileName || 'N/A' }}</strong><span class="text-muted mx-2">vs</span><strong>{{ pair.source2FileName || 'N/A' }}</strong><small class="ms-auto text-muted fw-normal me-3">{{ pair.status }}</small></button></h2>
+                        <div :id="'collapse' + index" class="accordion-collapse collapse" :aria-labelledby="'heading' + index" data-bs-parent="#comparisonAccordionVue">
                             <div class="accordion-body">
                                 <p v-if="pair.errorMessage" class="alert alert-danger p-2"><small>{{ pair.errorMessage }}</small></p>
-                                <div v-if="pair.status === 'MATCHED'">
-                                    <p class="text-success"><i class="fas fa-thumbs-up me-1"></i>Files are identical ({{ pair.matchCount }} lines).</p>
-                                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's1')">
-                                        View Source 1 Content ({{ pair.source1Content ? pair.source1Content.length : 0 }} lines)
-                                    </button>
-                                    <div v-if="pair.showS1Content" class="content-details">{{ pair.source1Content.join('\n') }}</div>
-                                </div>
-                                <div v-else-if="pair.status === 'MISSING_IN_SOURCE1'">
-                                    <p>File missing in Source 1. Source 2 has {{ pair.source2Content ? pair.source2Content.length : 0 }} lines.</p>
-                                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's2')">
-                                        View Source 2 Content
-                                    </button>
-                                    <div v-if="pair.showS2Content" class="content-details">{{ pair.source2Content.join('\n') }}</div>
-                                </div>
-                                <div v-else-if="pair.status === 'MISSING_IN_SOURCE2'">
-                                    <p>File missing in Source 2. Source 1 has {{ pair.source1Content ? pair.source1Content.length : 0 }} lines.</p>
-                                    <button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's1')">
-                                        View Source 1 Content
-                                    </button>
-                                    <div v-if="pair.showS1Content" class="content-details">{{ pair.source1Content.join('\n') }}</div>
-                                </div>
+                                <div v-if="pair.status === 'MATCHED'"><p class="text-success"><i class="fas fa-thumbs-up me-1"></i>Identical ({{ pair.matchCount }} lines).</p><button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's1')">View S1 ({{ pair.source1Content?.length || 0 }})</button><div v-if="pair.showS1Content" class="content-details">{{ pair.source1Content?.join('\n') }}</div></div>
+                                <div v-else-if="pair.status === 'MISSING_IN_SOURCE1'"><p>S2 ({{ pair.source2Content?.length || 0 }} lines) only.</p><button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's2')">View S2</button><div v-if="pair.showS2Content" class="content-details">{{ pair.source2Content?.join('\n') }}</div></div>
+                                <div v-else-if="pair.status === 'MISSING_IN_SOURCE2'"><p>S1 ({{ pair.source1Content?.length || 0 }} lines) only.</p><button class="btn btn-sm btn-outline-secondary mb-2" @click="toggleContent(pair, 's1')">View S1</button><div v-if="pair.showS1Content" class="content-details">{{ pair.source1Content?.join('\n') }}</div></div>
                                 <div v-else-if="pair.status === 'MISMATCHED' || pair.status === 'DIFFERENT_ROW_COUNT'">
-                                    <p>Summary: {{ pair.mismatchCount }} mismatches, {{ pair.missingInSource2Count }} S1-only lines, {{ pair.missingInSource1Count }} S2-only lines. {{ pair.matchCount }} matching lines.</p>
-                                    <div v-if="pair.differences && pair.differences.length > 0" class="diff-container">
-                                        <h6 class="mt-2 mb-2">Line Differences:</h6>
-                                        <div v-for="diff in pair.differences" :key="diff.lineNumber" class="diff-line-detail">
-                                            <strong class="line-number">Line {{ diff.lineNumber }}: {{ diff.type.replace(/_/g, ' ') }}</strong>
-                                            <div class="row g-2">
-                                                <div class="col-md-6">
-                                                    <div v-if="diff.source1Line !== null" class="diff-content-block diff-s1"><strong>S1:</strong><br>{{ diff.source1Line }}</div>
-                                                    <div v-else class="diff-content-block diff-placeholder">--- Missing in S1 ---</div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div v-if="diff.source2Line !== null" class="diff-content-block diff-s2"><strong>S2:</strong><br>{{ diff.source2Line }}</div>
-                                                    <div v-else class="diff-content-block diff-placeholder">--- Missing in S2 ---</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div v-else><p class="text-muted">No specific line differences listed (could be only length or parse issue before diffing).</p></div>
-                                    <div class="mt-3">
-                                        <button class="btn btn-sm btn-outline-secondary mb-1 me-2" @click="toggleContent(pair, 's1')">
-                                            View Full S1 ({{ pair.source1Content ? pair.source1Content.length : 0 }} lines)
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary mb-1" @click="toggleContent(pair, 's2')">
-                                            View Full S2 ({{ pair.source2Content ? pair.source2Content.length : 0 }} lines)
-                                        </button>
-                                        <div v-if="pair.showS1Content" class="content-details mt-1">{{ pair.source1Content.join('\n') }}</div>
-                                        <div v-if="pair.showS2Content" class="content-details mt-1">{{ pair.source2Content.join('\n') }}</div>
-                                    </div>
+                                    <p>Summary: {{ pair.mismatchCount }} mismatches, {{ pair.missingInSource2Count }} S1-only, {{ pair.missingInSource1Count }} S2-only. {{ pair.matchCount }} matches.</p>
+                                    <div v-if="pair.differences?.length" class="diff-container"><h6>Line Differences:</h6><div v-for="diff in pair.differences" :key="diff.lineNumber" class="diff-line-detail"><strong class="line-number">L{{ diff.lineNumber }}: {{ diff.type.replace(/_/g, ' ') }}</strong><div class="row g-2"><div class="col-md-6"><div v-if="diff.source1Line !== null" class="diff-content-block diff-s1"><strong>S1:</strong><br>{{ diff.source1Line }}</div><div v-else class="diff-content-block diff-placeholder">--- Missing in S1 ---</div></div><div class="col-md-6"><div v-if="diff.source2Line !== null" class="diff-content-block diff-s2"><strong>S2:</strong><br>{{ diff.source2Line }}</div><div v-else class="diff-content-block diff-placeholder">--- Missing in S2 ---</div></div></div></div></div>
+                                    <div class="mt-3"><button class="btn btn-sm btn-outline-secondary mb-1 me-2" @click="toggleContent(pair, 's1')">Full S1 ({{ pair.source1Content?.length || 0 }})</button><button class="btn btn-sm btn-outline-secondary mb-1" @click="toggleContent(pair, 's2')">Full S2 ({{ pair.source2Content?.length || 0 }})</button><div v-if="pair.showS1Content" class="content-details mt-1">{{ pair.source1Content?.join('\n') }}</div><div v-if="pair.showS2Content" class="content-details mt-1">{{ pair.source2Content?.join('\n') }}</div></div>
                                 </div>
-                                <!-- Individual report download link (conceptual - requires backend to serve individual files) -->
-                                <!-- <a v-if="pair.individualReportPath" :href="'/download-report/' + comparisonResponse.sessionDirectoryRelativePath + '/' + pair.individualReportPath" target="_blank" class="btn btn-sm btn-link">Download Individual Report</a> -->
                             </div>
                         </div>
                     </div>
-                    <div v-if="comparisonResponse.pairResults && comparisonResponse.pairResults.length === 0" class="alert alert-info">
-                        No file pairs were processed or resulted from the comparison.
-                    </div>
                 </div>
             </div>
-            <button v-if="comparisonResponse && comparisonResponse.sessionDirectoryRelativePath"
-                    @click="cleanupSession" class="btn btn-sm btn-outline-warning mt-4">
-                <i class="fas fa-trash-alt me-1"></i> Clear Server Session Data for this Comparison
-            </button>
+            <button v-if="canCleanup" @click="cleanupSession" class="btn btn-sm btn-outline-warning mt-4"><i class="fas fa-trash-alt me-1"></i> Clear Server Session Data</button>
         </div>
     </div>
 </div>
@@ -285,268 +223,181 @@
 <script>
     const { createApp, ref, computed, watch } = Vue;
 
-    const FileUploader = {
-        props: ['sourceId', 'title', 'headerBg'],
-        emits: ['files-updated'],
+    // FileUploader Component Definition (same as previous single-file Vue example)
+    const FileUploader = { /* ... Copy FileUploader component code here ... */
+        props: ['sourceId', 'title', 'headerBg'], emits: ['files-updated'],
         setup(props, { emit }) {
-            const files = ref([]);
-            const dragOver = ref(false);
-            const fileInputRef = ref(null);
-
-            function handleFileDrop(event) {
-                dragOver.value = false;
-                addFiles(event.dataTransfer.files);
-            }
-
-            function handleFileInput(event) {
-                addFiles(event.target.files);
-                if(fileInputRef.value) fileInputRef.value.value = null; // Reset input
-            }
-
+            const files = ref([]); const dragOver = ref(false); const fileInputRef = ref(null);
+            function triggerFileInput() { fileInputRef.value.click(); }
+            function handleFileDrop(event) { dragOver.value = false; addFiles(event.dataTransfer.files); }
+            function handleFileInput(event) { addFiles(event.target.files); if(fileInputRef.value) fileInputRef.value.value = null; }
             function addFiles(fileList) {
-                const newFiles = Array.from(fileList).filter(
-                    newFile => !files.value.some(existingFile => existingFile.name === newFile.name && existingFile.size === newFile.size)
-                );
-                files.value.push(...newFiles);
-                emit('files-updated', [...files.value]); // Emit copy
+                const newFiles = Array.from(fileList).filter(nf => !files.value.some(ef => ef.name === nf.name && ef.size === nf.size));
+                files.value.push(...newFiles); emit('files-updated', [...files.value]);
             }
-
-            function removeFile(index) {
-                files.value.splice(index, 1);
-                emit('files-updated', [...files.value]);
-            }
-
-            function clearFiles() {
-                files.value = [];
-                emit('files-updated', []);
-            }
-
-            return {
-                files, dragOver, fileInputRef,
-                handleFileDrop, handleFileInput, removeFile, clearFiles,
-                formatSize: (size) => (size / 1024).toFixed(2) + ' KB'
-            };
+            function removeFile(index) { files.value.splice(index, 1); emit('files-updated', [...files.value]); }
+            function clearFiles() { files.value = []; emit('files-updated', []); }
+            return { files, dragOver, fileInputRef, triggerFileInput, handleFileDrop, handleFileInput, removeFile, clearFiles, formatSize: (size) => (size/1024).toFixed(2) + ' KB' };
         },
-        template: `
-                <div class="card h-100">
-                    <div class="card-header text-white" :class="headerBg">
-                        <h5 class="mb-0"><i class="fas" :class="sourceId === 1 ? 'fa-file-upload' : 'fa-file-import'"></i> {{ title }}</h5>
-                    </div>
-                    <div class="card-body d-flex flex-column">
-                        <div class="drop-zone mb-3 flex-grow-1"
-                             :class="{ 'dragover': dragOver }"
-                             @click="fileInputRef.click()"
-                             @dragover.prevent="dragOver = true"
-                             @dragenter.prevent="dragOver = true"
-                             @dragleave.prevent="dragOver = false"
-                             @drop.prevent="handleFileDrop">
-                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
-                            <p class="mb-0 small">Drag & drop files here or click to select</p>
-                            <input type="file" multiple class="d-none" ref="fileInputRef" @change="handleFileInput">
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <small class="text-muted">{{ files.length }} file(s) selected</small>
-                            <button v-if="files.length > 0" @click="clearFiles" class="btn btn-sm btn-outline-secondary py-0 px-1">Clear All</button>
-                        </div>
-                        <ul v-if="files.length > 0" class="list-group list-group-flush file-list-bootstrap" style="max-height: 150px; overflow-y: auto;">
-                            <li v-for="(file, index) in files" :key="file.name + index" class="list-group-item file-list-item d-flex justify-content-between align-items-center">
-                                <span>{{ file.name }} <small class="text-muted">({{ formatSize(file.size) }})</small></span>
-                                <button @click.stop="removeFile(index)" class="remove-file-btn"><i class="fas fa-times"></i></button>
-                            </li>
-                        </ul>
-                         <p v-else class="text-muted small text-center">No files selected.</p>
-                    </div>
-                </div>`
+        template: `<div class="card h-100"><div class="card-header text-white" :class="headerBg"><h5 class="mb-0"><i class="fas" :class="sourceId === 1 ? 'fa-file-upload' : 'fa-file-import'"></i> {{ title }}</h5></div><div class="card-body d-flex flex-column"><div class="drop-zone mb-3 flex-grow-1" :class="{ 'dragover': dragOver }" @click="triggerFileInput" @dragover.prevent="dragOver = true" @dragenter.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="handleFileDrop"><i class="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i><p class="mb-0 small">Drag & drop or click</p><input type="file" multiple class="d-none" ref="fileInputRef" @change="handleFileInput"></div><div class="d-flex justify-content-between align-items-center mb-2"><small class="text-muted">{{ files.length }} file(s)</small><button v-if="files.length > 0" @click="clearFiles" class="btn btn-sm btn-outline-secondary py-0 px-1">Clear</button></div><ul v-if="files.length > 0" class="list-group list-group-flush" style="max-height: 150px; overflow-y: auto;"><li v-for="(file, index) in files" :key="file.name + index" class="list-group-item file-list-item d-flex justify-content-between align-items-center"><span>{{ file.name }} <small class="text-muted">({{ formatSize(file.size) }})</small></span><button @click.stop="removeFile(index)" class="remove-file-btn"><i class="fas fa-times"></i></button></li></ul><p v-else class="text-muted small text-center">No files.</p></div></div>`
     };
+
 
     createApp({
         components: { FileUploader },
         setup() {
-            const source1Files = ref([]);
-            const source2Files = ref([]);
-            const sortFiles = ref(false);
-            const manualPairs = ref([]);
-            const selectedS1ToPair = ref(null);
-            const selectedS2ToPair = ref(null);
-
-            const isLoading = ref(false);
-            const comparisonResponse = ref(null);
-            const comparisonError = ref(null);
+            // --- Existing refs from previous Vue single-file example ---
+            const source1Files = ref([]); const source2Files = ref([]);
+            const sortFiles = ref(false); const manualPairs = ref([]);
+            const selectedS1ToPair = ref(null); const selectedS2ToPair = ref(null);
+            const isLoading = ref(false); const comparisonResponse = ref(null); const comparisonError = ref(null);
 
             const updateFiles1 = (files) => source1Files.value = files;
             const updateFiles2 = (files) => source2Files.value = files;
-
-            const showManualPairingSection = computed(() => {
-                return (source1Files.value.length > 0 && source2Files.value.length > 0) &&
-                    (source1Files.value.length > 1 || source2Files.value.length > 1);
+            const showManualPairingSection = computed(() => (source1Files.value.length > 0 && source2Files.value.length > 0) && (source1Files.value.length > 1 || source2Files.value.length > 1));
+            watch([source1Files, source2Files], () => { /* ... existing watch logic for manual pairs ... */
+                selectedS1ToPair.value = null; selectedS2ToPair.value = null;
+                const s1Names = source1Files.value.map(f => f.name); const s2Names = source2Files.value.map(f => f.name);
+                manualPairs.value = manualPairs.value.filter(p => s1Names.includes(p.source1FileName) && s2Names.includes(p.source2FileName));
             });
-
-            watch([source1Files, source2Files], () => { // Reset pairing selections if main lists change
-                selectedS1ToPair.value = null;
-                selectedS2ToPair.value = null;
-                // If a file used in a manual pair is removed, that pair should ideally be removed too.
-                // For simplicity, we'll let users manage this via the "unpair" button for now.
-                // Or, more robustly:
-                const s1Names = source1Files.value.map(f => f.name);
-                const s2Names = source2Files.value.map(f => f.name);
-                manualPairs.value = manualPairs.value.filter(p =>
-                    s1Names.includes(p.source1FileName) && s2Names.includes(p.source2FileName)
-                );
-            });
-
-
-            const availableS1ForPairing = computed(() => {
-                const pairedS1Names = manualPairs.value.map(p => p.source1FileName);
-                return source1Files.value.filter(f => !pairedS1Names.includes(f.name));
-            });
-            const availableS2ForPairing = computed(() => {
-                const pairedS2Names = manualPairs.value.map(p => p.source2FileName);
-                return source2Files.value.filter(f => !pairedS2Names.includes(f.name));
-            });
-
-            function selectS1ForPairing(fileName) {
-                selectedS1ToPair.value = (selectedS1ToPair.value === fileName) ? null : fileName;
-            }
-            function selectS2ForPairing(fileName) {
-                selectedS2ToPair.value = (selectedS2ToPair.value === fileName) ? null : fileName;
-            }
-
+            const availableS1ForPairing = computed(() => source1Files.value.filter(f => !manualPairs.value.some(p => p.source1FileName === f.name)));
+            const availableS2ForPairing = computed(() => source2Files.value.filter(f => !manualPairs.value.some(p => p.source2FileName === f.name)));
+            function selectS1ForPairing(fileName) { selectedS1ToPair.value = (selectedS1ToPair.value === fileName) ? null : fileName; }
+            function selectS2ForPairing(fileName) { selectedS2ToPair.value = (selectedS2ToPair.value === fileName) ? null : fileName; }
             const canAddManualPair = computed(() => selectedS1ToPair.value && selectedS2ToPair.value);
+            function addManualPair() { if (canAddManualPair.value) { manualPairs.value.push({ source1FileName: selectedS1ToPair.value, source2FileName: selectedS2ToPair.value }); selectedS1ToPair.value = null; selectedS2ToPair.value = null; } }
+            function removeManualPair(index) { manualPairs.value.splice(index, 1); }
 
-            function addManualPair() {
-                if (canAddManualPair.value) {
-                    manualPairs.value.push({
-                        source1FileName: selectedS1ToPair.value,
-                        source2FileName: selectedS2ToPair.value
-                    });
-                    selectedS1ToPair.value = null;
-                    selectedS2ToPair.value = null;
+            // --- NEW Refs and Logic for Column Ignore ---
+            const s1DetectedColumns = ref([]); const s2DetectedColumns = ref([]);
+            const s1ColumnsToIgnoreArray = ref([]); // Use Array for v-model with multiple checkboxes
+            const s2ColumnsToIgnoreArray = ref([]);
+            const s1HasHeader = ref(true); const s2HasHeader = ref(true);
+            const s1ProcessingColumns = ref(false); const s2ProcessingColumns = ref(false);
+            const s1ColumnDetectionFile = ref(null); const s2ColumnDetectionFile = ref(null);
+
+            const s1ColumnIdentifier = (colName, index) => s1HasHeader.value && colName !== `Column ${index + 1}` && !/^\d+$/.test(colName) ? colName : String(index);
+            const s2ColumnIdentifier = (colName, index) => s2HasHeader.value && colName !== `Column ${index + 1}` && !/^\d+$/.test(colName) ? colName : String(index);
+
+            async function detectColumns(sourceNum, forceRedetect = false) {
+                const files = sourceNum === 1 ? source1Files.value : source2Files.value;
+                const processingFlag = sourceNum === 1 ? s1ProcessingColumns : s2ProcessingColumns;
+                const detectedColsRef = sourceNum === 1 ? s1DetectedColumns : s2DetectedColumns;
+                const detectionFileRef = sourceNum === 1 ? s1ColumnDetectionFile : s2ColumnDetectionFile;
+                const ignoreArrayRef = sourceNum === 1 ? s1ColumnsToIgnoreArray : s2ColumnsToIgnoreArray;
+
+                if (files.length === 0) {
+                    detectedColsRef.value = []; detectionFileRef.value = null; ignoreArrayRef.value = [];
+                    return;
                 }
-            }
-            function removeManualPair(index) {
-                manualPairs.value.splice(index, 1);
+
+                const sampleFile = files.find(f => /\.(csv|txt|xls|xlsx)$/i.test(f.name)) || files[0];
+                if (!forceRedetect && detectionFileRef.value === sampleFile.name && detectedColsRef.value.length > 0) return; // Already processed this file
+
+                processingFlag.value = true;
+                detectionFileRef.value = sampleFile.name;
+                ignoreArrayRef.value = []; // Clear ignores on re-detect
+
+                try {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const text = e.target.result;
+                        let firstLine = text.split(/\r\n|\r|\n/)[0];
+                        let columns = [];
+                        // Basic CSV/TSV split. For robust, use PapaParse or similar on client or get headers from backend.
+                        if (firstLine.includes(',')) columns = firstLine.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
+                        else if (firstLine.includes('\t')) columns = firstLine.split('\t').map(c => c.trim().replace(/^["']|["']$/g, ''));
+                        else if (firstLine.length > 0) columns = [firstLine.trim().replace(/^["']|["']$/g, '')]; // Treat as single column
+
+                        if (columns.length > 0 && columns.some(c => c && c.length > 0)) {
+                            detectedColsRef.value = columns.map((c, i) => (c && c.trim() !== "") ? c : `Unnamed Column ${i + 1}`);
+                        } else { // Fallback to indexed columns
+                            const lineContentForCount = firstLine || (text.split(/\r\n|\r|\n/)[1] || ""); // Use 2nd line if 1st empty
+                            const colCount = Math.max(1, (lineContentForCount.match(/,/g) || []).length + 1, (lineContentForCount.match(/\t/g) || []).length + 1);
+                            detectedColsRef.value = Array.from({ length: colCount }, (_, i) => `Column ${i + 1}`);
+                            if (sourceNum === 1) s1HasHeader.value = false; else s2HasHeader.value = false;
+                        }
+                        processingFlag.value = false;
+                    };
+                    reader.onerror = () => { detectedColsRef.value = []; processingFlag.value = false; };
+                    reader.readAsText(sampleFile.slice(0, 2048)); // Read first 2KB
+                } catch (error) { detectedColsRef.value = []; processingFlag.value = false; }
             }
 
-            async function performComparison() {
-                isLoading.value = true;
-                comparisonResponse.value = null;
-                comparisonError.value = null;
+            function handleHeaderCheckboxChange(sourceNum) {
+                // When "Has Header" changes, re-evaluate what's in the ignore list
+                // because the identifiers (name vs index) change.
+                // For simplicity, just clear ignores. User can re-select.
+                if (sourceNum === 1) s1ColumnsToIgnoreArray.value = []; else s2ColumnsToIgnoreArray.value = [];
+                // Optionally, re-trigger detection if needed, or just let identifiers update
+                // detectColumns(sourceNum, true); // This might be too aggressive
+            }
 
+
+            watch(source1Files, (newVal, oldVal) => { if (newVal.length > 0 || (oldVal && oldVal.length > 0)) detectColumns(1); else { s1DetectedColumns.value = []; s1ColumnDetectionFile.value = null; s1ColumnsToIgnoreArray.value = [];}}, { deep: true });
+            watch(source2Files, (newVal, oldVal) => { if (newVal.length > 0 || (oldVal && oldVal.length > 0)) detectColumns(2); else { s2DetectedColumns.value = []; s2ColumnDetectionFile.value = null; s2ColumnsToIgnoreArray.value = [];}}, { deep: true });
+
+            const allS1Ignored = computed(() => s1DetectedColumns.value.length > 0 && s1ColumnsToIgnoreArray.value.length === s1DetectedColumns.value.length);
+            function toggleAllS1Ignores() { if (allS1Ignored.value) s1ColumnsToIgnoreArray.value = []; else s1ColumnsToIgnoreArray.value = s1DetectedColumns.value.map((col, index) => s1ColumnIdentifier(col, index)); }
+            const allS2Ignored = computed(() => s2DetectedColumns.value.length > 0 && s2ColumnsToIgnoreArray.value.length === s2DetectedColumns.value.length);
+            function toggleAllS2Ignores() { if (allS2Ignored.value) s2ColumnsToIgnoreArray.value = []; else s2ColumnsToIgnoreArray.value = s2DetectedColumns.value.map((col, index) => s2ColumnIdentifier(col, index)); }
+
+            async function performComparison() { /* ... same as before, but add ignoreConfig and header flags ... */
+                isLoading.value = true; comparisonResponse.value = null; comparisonError.value = null;
                 const formData = new FormData();
                 source1Files.value.forEach(f => formData.append('source1Files', f));
                 source2Files.value.forEach(f => formData.append('source2Files', f));
                 formData.append('sortFiles', sortFiles.value);
                 formData.append('manualPairs', JSON.stringify(manualPairs.value));
+                // Add column ignore config
+                formData.append('s1IgnoreConfigJson', JSON.stringify(s1ColumnsToIgnoreArray.value));
+                formData.append('s2IgnoreConfigJson', JSON.stringify(s2ColumnsToIgnoreArray.value));
+                formData.append('s1HasHeader', s1HasHeader.value);
+                formData.append('s2HasHeader', s2HasHeader.value);
 
-                try {
+                try { /* ... fetch and handle response ... */
                     const response = await fetch('/compare', { method: 'POST', body: formData });
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Server error ${response.status}: ${errorText || 'Failed to compare.'}`);
-                    }
+                    if (!response.ok) { const errorText = await response.text(); throw new Error(`Server error ${response.status}: ${errorText || 'Failed to compare.'}`);}
                     const data = await response.json();
-                    // Add showS1Content/showS2Content flags for UI toggles
-                    if(data.pairResults) {
-                        data.pairResults.forEach(pair => {
-                            pair.showS1Content = false;
-                            pair.showS2Content = false;
-                        });
-                    }
+                    if(data.pairResults) data.pairResults.forEach(pair => { pair.showS1Content = false; pair.showS2Content = false; });
                     comparisonResponse.value = data;
-                } catch (err) {
-                    console.error("Comparison error:", err);
-                    comparisonError.value = err.message;
-                } finally {
-                    isLoading.value = false;
-                }
+                } catch (err) { console.error("Comparison error:", err); comparisonError.value = err.message; }
+                finally { isLoading.value = false; }
             }
 
-            function downloadReportsZip() {
-                if (comparisonResponse.value && comparisonResponse.value.sessionDirectoryRelativePath) {
-                    window.location.href = '/download-reports'; // Backend handles session
-                } else {
-                    alert("No session information available to download reports.");
-                }
+            // --- Existing helper functions (formatMetricKey, getBadgeClass, etc.) ---
+            const canDownloadZip = computed(() => comparisonResponse.value?.pairResults?.length > 0 && comparisonResponse.value?.sessionDirectoryRelativePath);
+            const canCleanup = computed(() => comparisonResponse.value?.sessionDirectoryRelativePath);
+            function downloadReportsZip() { if (canDownloadZip.value) window.location.href = '/download-reports'; else alert("No session information available.");}
+            async function cleanupSession() { /* ... same ... */
+                if (!canCleanup.value) { alert("No active session."); return; } isLoading.value = true;
+                try { const resp = await fetch('/cleanup-comparison-session', { method: 'POST' }); if (resp.ok) { alert('Server session cleaned.'); comparisonResponse.value = null; comparisonError.value = null;} else { alert('Failed to clean session: ' + await resp.text());}} catch (err) { alert('Error cleanup: ' + err.message);} finally { isLoading.value = false; }
             }
-
-            async function cleanupSession() {
-                if (!comparisonResponse.value || !comparisonResponse.value.sessionDirectoryRelativePath) {
-                    alert("No comparison session active to clean up.");
-                    return;
-                }
-                isLoading.value = true; // Indicate activity
-                try {
-                    const response = await fetch('/cleanup-comparison-session', { method: 'POST' });
-                    if (response.ok) {
-                        alert('Server session data for this comparison has been cleaned up.');
-                        comparisonResponse.value = null; // Clear UI results
-                        comparisonError.value = null;
-                    } else {
-                        alert('Failed to clean up server session data: ' + await response.text());
-                    }
-                } catch (err) {
-                    alert('Error during cleanup: ' + err.message);
-                } finally {
-                    isLoading.value = false;
-                }
-            }
-
-            function formatMetricKey(key) {
-                return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-            }
-            function getBadgeClass(key, value) {
-                if (value === 0 && (key.includes('Mismatched') || key.includes('OnlyIn') || key.includes('Error'))) return 'badge bg-success rounded-pill';
-                if (key.includes('Matched')) return 'badge bg-success rounded-pill';
-                if (key.includes('Mismatched') || key.includes('Error')) return 'badge bg-danger rounded-pill';
-                if (key.includes('OnlyIn')) return 'badge bg-warning text-dark rounded-pill';
-                return '';
-            }
-            function getStatusIcon(status) {
-                switch(status) {
-                    case 'MATCHED': return 'fas fa-check-circle text-success';
-                    case 'MISMATCHED': return 'fas fa-times-circle text-danger';
-                    case 'DIFFERENT_ROW_COUNT': return 'fas fa-exclamation-triangle text-orange';
-                    case 'MISSING_IN_SOURCE1':
-                    case 'MISSING_IN_SOURCE2': return 'fas fa-question-circle text-warning';
-                    case 'PARSE_ERROR_S1':
-                    case 'PARSE_ERROR_S2': return 'fas fa-bug text-danger';
-                    default: return 'fas fa-info-circle text-info';
-                }
-            }
-            function getAccordionHeaderClass(status) {
-                switch(status) {
-                    case 'MATCHED': return 'accordion-button-matched';
-                    case 'MISMATCHED': return 'accordion-button-mismatched';
-                    case 'DIFFERENT_ROW_COUNT': return 'accordion-button-different-row-count';
-                    case 'MISSING_IN_SOURCE1':
-                    case 'MISSING_IN_SOURCE2': return 'accordion-button-missing';
-                    case 'PARSE_ERROR_S1':
-                    case 'PARSE_ERROR_S2': return 'accordion-button-error';
-                    default: return '';
-                }
-            }
-            function toggleContent(pair, source) { // source is 's1' or 's2'
-                if (source === 's1') pair.showS1Content = !pair.showS1Content;
-                if (source === 's2') pair.showS2Content = !pair.showS2Content;
-            }
+            function formatMetricKey(key) { return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()); }
+            function getBadgeClass(key, value) { /* ... same ... */ if (value === 0 && (key.includes('Mismatched') || key.includes('OnlyIn') || key.includes('Error'))) return 'badge bg-success rounded-pill'; if (key.includes('Matched')) return 'badge bg-success rounded-pill'; if (key.includes('Mismatched') || key.includes('Error')) return 'badge bg-danger rounded-pill'; if (key.includes('OnlyIn')) return 'badge bg-warning text-dark rounded-pill'; return ''; }
+            function getStatusIcon(status) { /* ... same ... */ const icons = { MATCHED: 'fas fa-check-circle text-success', MISMATCHED: 'fas fa-times-circle text-danger', DIFFERENT_ROW_COUNT: 'fas fa-exclamation-triangle text-orange', MISSING_IN_SOURCE1: 'fas fa-question-circle text-warning', MISSING_IN_SOURCE2: 'fas fa-question-circle text-warning', PARSE_ERROR_S1: 'fas fa-bug text-danger', PARSE_ERROR_S2: 'fas fa-bug text-danger' }; return icons[status] || 'fas fa-info-circle text-info';}
+            function getAccordionHeaderClass(status) { /* ... same ... */ const classes = { MATCHED: 'accordion-button-matched', MISMATCHED: 'accordion-button-mismatched', DIFFERENT_ROW_COUNT: 'accordion-button-different-row-count', MISSING_IN_SOURCE1: 'accordion-button-missing', MISSING_IN_SOURCE2: 'accordion-button-missing', PARSE_ERROR_S1: 'accordion-button-error', PARSE_ERROR_S2: 'accordion-button-error' }; return classes[status] || '';}
+            function toggleContent(pair, source) { if (source === 's1') pair.showS1Content = !pair.showS1Content; if (source === 's2') pair.showS2Content = !pair.showS2Content;}
 
 
             return {
-                source1Files, source2Files, sortFiles, manualPairs,
-                selectedS1ToPair, selectedS2ToPair,
-                isLoading, comparisonResponse, comparisonError,
-                updateFiles1, updateFiles2,
-                showManualPairingSection,
-                availableS1ForPairing, availableS2ForPairing,
-                selectS1ForPairing, selectS2ForPairing,
-                canAddManualPair, addManualPair, removeManualPair,
+                source1Files, source2Files, sortFiles, manualPairs, selectedS1ToPair, selectedS2ToPair,
+                isLoading, comparisonResponse, comparisonError, updateFiles1, updateFiles2,
+                showManualPairingSection, availableS1ForPairing, availableS2ForPairing,
+                selectS1ForPairing, selectS2ForPairing, canAddManualPair, addManualPair, removeManualPair,
                 performComparison, downloadReportsZip, cleanupSession,
-                formatMetricKey, getBadgeClass, getStatusIcon, getAccordionHeaderClass, toggleContent
+                formatMetricKey, getBadgeClass, getStatusIcon, getAccordionHeaderClass, toggleContent,
+                canDownloadZip, canCleanup, // Expose these
+                // New for column ignore
+                s1DetectedColumns, s2DetectedColumns, s1ColumnsToIgnoreArray, s2ColumnsToIgnoreArray,
+                s1HasHeader, s2HasHeader, s1ProcessingColumns, s2ProcessingColumns,
+                detectColumns, s1ColumnIdentifier, s2ColumnIdentifier,
+                allS1Ignored, toggleAllS1Ignores, allS2Ignored, toggleAllS2Ignores,
+                s1ColumnDetectionFile, s2ColumnDetectionFile, handleHeaderCheckboxChange
             };
         }
     }).mount('#app');
 </script>
-<!-- Bootstrap JS Bundle (Popper.js included) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

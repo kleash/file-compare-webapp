@@ -1,5 +1,6 @@
 package com.github.kleash.controller;
 
+import com.github.kleash.dto.ColumnIgnoreConfig;
 import com.github.kleash.dto.ComparisonResponse;
 import com.github.kleash.dto.ManualPair;
 import com.github.kleash.dto.OverallMetrics; // For constructing error responses
@@ -28,10 +29,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors; // For Collectors.toList() if needed
 import java.util.stream.Stream;
 
@@ -66,12 +64,40 @@ public class CompareController {
             @RequestParam(value = "source2Files", required = false) MultipartFile[] source2FilesArr,
             @RequestParam(defaultValue = "false") boolean sortFiles,
             @RequestParam(value = "manualPairs", required = false) String manualPairsJson,
+            @RequestParam(value = "s1IgnoreConfigJson", required = false) String s1IgnoreConfigJson,
+            @RequestParam(value = "s2IgnoreConfigJson", required = false) String s2IgnoreConfigJson,
+            @RequestParam(value = "s1HasHeader", defaultValue = "true") boolean s1HasHeader,
+            @RequestParam(value = "s2HasHeader", defaultValue = "true") boolean s2HasHeader,
             HttpServletRequest httpRequest, // Injected to get request details like User-Agent
             HttpSession httpSession) {
 
         long startTime = System.currentTimeMillis();
         Path sessionPath = null; // Will store the absolute path to the session's storage directory
         String relativeSessionPathForZip = null; // For logging the potential zip path
+
+        ColumnIgnoreConfig ignoreConfig = new ColumnIgnoreConfig();
+        try {
+            if (s1IgnoreConfigJson != null && !s1IgnoreConfigJson.isEmpty()) {
+                ignoreConfig.setSource1Ignore(objectMapper.readValue(s1IgnoreConfigJson, new TypeReference<Set<String>>() {}));
+            } else {
+                ignoreConfig.setSource1Ignore(Collections.emptySet());
+            }
+            if (s2IgnoreConfigJson != null && !s2IgnoreConfigJson.isEmpty()) {
+                ignoreConfig.setSource2Ignore(objectMapper.readValue(s2IgnoreConfigJson, new TypeReference<Set<String>>() {}));
+            } else {
+                ignoreConfig.setSource2Ignore(Collections.emptySet());
+            }
+        } catch (IOException e) {
+            logger.error("Error parsing column ignore config JSON: S1='{}', S2='{}', Error: {}", s1IgnoreConfigJson, s2IgnoreConfigJson, e.getMessage());
+            // Default to no ignores on parse error or return Bad Request
+            ignoreConfig.setSource1Ignore(Collections.emptySet());
+            ignoreConfig.setSource2Ignore(Collections.emptySet());
+            OverallMetrics emptyMetrics = new OverallMetrics();
+            return ResponseEntity.badRequest().body(new ComparisonResponse(emptyMetrics, Collections.emptyList(), null));
+        }
+        logger.info("Column Ignore Config: S1 ignore count: {}, S2 ignore count: {}", ignoreConfig.getSource1Ignore().size(), ignoreConfig.getSource2Ignore().size());
+        logger.info("Header flags: S1 has header: {}, S2 has header: {}", s1HasHeader, s2HasHeader);
+
 
         // Filter out empty MultipartFile objects if no file is selected in a dropzone
         List<MultipartFile> source1Files = (source1FilesArr != null) ?
@@ -115,7 +141,8 @@ public class CompareController {
             logger.info("Stored {} files for Source 2 in session directory.", s2StoredFilePaths.size());
 
             // Pass s1StoredFilePaths and s2StoredFilePaths to compareService
-            ComparisonResponse response = compareService.compareFiles(s1StoredFilePaths, s2StoredFilePaths, sortFiles, sessionPath, manualPairs);
+            ComparisonResponse response = compareService.compareFiles(s1StoredFilePaths, s2StoredFilePaths, sortFiles, sessionPath, manualPairs,
+                    ignoreConfig, s1HasHeader, s2HasHeader);
 
             long executionTimeMs = System.currentTimeMillis() - startTime;
 
